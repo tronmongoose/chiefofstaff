@@ -1,0 +1,3 @@
+Erik Huckle is building a personal AI agent.
+He wants it to serve as a Chief of Staff.
+He uses LangGraph and Cursor IDE.
