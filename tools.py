@@ -10,3 +10,6 @@ def get_weather(location: str) -> str:
 def get_todo_list(user: str) -> str:
     """Returns a pretend todo list for a user"""
     return f"{user}'s todo list: 1) Build AI agent. 2) Test LangGraph. 3) Celebrate progress."
+
+# Export tools as a list
+tools = [get_weather, get_todo_list]

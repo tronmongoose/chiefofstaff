@@ -1,92 +1,83 @@
 import os
-from typing import TypedDict, Annotated
 from dotenv import load_dotenv
-from langgraph.graph import StateGraph, END
+from langgraph.graph import StateGraph
 from langchain_openai import ChatOpenAI
-from retrieval import create_vectorstore, query_knowledge
+from state import AgentState
+from memory import create_memory
+from tools import tools
+from retrieval import create_vectorstore
+from langchain_core.runnables import RunnableLambda
 
-# Optional imports for memory, tools, and retrieval
-try:
-    from memory import create_memory
-except ImportError:
-    create_memory = None
-try:
-    from tools import get_weather, get_todo_list
-except ImportError:
-    get_weather = None
-    get_todo_list = None
-
-# Load API key from .env file
+# Load keys
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# Initialize the LLM
+# Initialize components
 llm = ChatOpenAI(openai_api_key=OPENAI_API_KEY, model="gpt-4")
-
-# Initialize memory if available
-memory = create_memory() if create_memory else None
-
-# Initialize tools if available
-TOOLS = []
-if get_weather:
-    TOOLS.append(get_weather)
-if get_todo_list:
-    TOOLS.append(get_todo_list)
-
-# Initialize the vectorstore
+memory = create_memory()
 vectorstore = create_vectorstore()
 
-# Define our state type
-class AgentState(TypedDict):
-    messages: list[str]
-    next: str
+# ---- LangGraph Nodes ----
 
-# Define our nodes
-def agent_node(state: AgentState) -> AgentState:
-    """Generate a response based on the last message and relevant knowledge."""
-    last_message = state["messages"][-1]
+# 1️⃣ Memory Node
+def memory_node(state: AgentState) -> AgentState:
+    chat_history = memory.load_memory_variables({}).get("chat_history", [])
+    state["chat_history"] = chat_history
+    return state
+
+# 2️⃣ Retrieval Node
+def retrieval_node(state: AgentState) -> AgentState:
+    retriever = vectorstore.as_retriever()
+    docs = retriever.get_relevant_documents(state['input'])
+    retrieved_text = "\n".join([doc.page_content for doc in docs])
+    state['retrieved_docs'] = retrieved_text
+    return state
+
+# 3️⃣ Reasoning Node (LLM core)
+def reasoning_node(state: AgentState) -> AgentState:
+    # Format tools for the prompt
+    tools_str = "\n".join([f"- {tool.name}: {tool.description}" for tool in tools])
     
-    # Query relevant knowledge
-    relevant_docs = query_knowledge(last_message, vectorstore)
-    knowledge_context = "\n".join(doc.page_content for doc in relevant_docs)
-    
-    # Construct the prompt with context
-    prompt = f"""You are an AI assistant with access to the following relevant information:
+    input_prompt = (
+        f"""You are a helpful AI assistant with access to the following tools:
 
-{knowledge_context}
+{tools_str}
 
-User's message: {last_message}
+User's message: {state['input']}
 
-Please provide a helpful response that incorporates the relevant information above when appropriate."""
-    
-    response = llm.invoke(prompt)
-    return {
-        "messages": state["messages"] + [response.content],
-        "next": END
-    }
+Chat history:
+{state.get('chat_history', '')}
 
-# Create the graph
-workflow = StateGraph(AgentState)
+Relevant knowledge from the knowledge base:
+{state.get('retrieved_docs', '')}
 
-# Add the agent node
-workflow.add_node("agent", agent_node)
+Please provide a helpful response. If the user's question can be answered using the tools above, use them appropriately."""
+    )
+    response = llm.invoke(input_prompt)
+    state['response'] = response.content
+    memory.save_context({"input": state['input']}, {"output": response.content})
+    return state
 
-# Set the entry point
-workflow.set_entry_point("agent")
+# ---- Build LangGraph ----
 
-# Compile the graph
-app = workflow.compile()
+graph = StateGraph(AgentState)
 
-# Test the graph
+graph.add_node("memory", memory_node)
+graph.add_node("retrieval", retrieval_node)
+graph.add_node("reasoning", reasoning_node)
+
+graph.set_entry_point("memory")
+graph.add_edge("memory", "retrieval")
+graph.add_edge("retrieval", "reasoning")
+
+app = graph.compile()
+
+# ---- Infinite Chat Loop ----
+
 if __name__ == "__main__":
-    # Initialize the state
-    initial_state = {
-        "messages": ["I'm ready to build my AI agent!"],
-        "next": "agent"
-    }
-    
-    # Run the graph
-    result = app.invoke(initial_state)
-    print("\nFinal messages:")
-    for msg in result["messages"]:
-        print(f"- {msg}")
+    while True:
+        user_input = input("You: ")
+        if user_input.lower() in ["exit", "quit"]:
+            break
+        output = app.invoke({"input": user_input})
+        print("AI:", output['response'])
