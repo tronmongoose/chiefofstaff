@@ -140,6 +140,7 @@ AI: Erik Huckle's todo list: 1) Build AI agent. 2) Test LangGraph. 3) Celebrate 
 ## ⚠️ Deprecation Warnings
 - You may see warnings about the memory system. This is due to ongoing changes in LangChain. For the latest, see the [LangChain Memory Migration Guide](https://python.langchain.com/docs/versions/migrating_memory/).
 - The retrieval system uses the latest `langchain-chroma` package as recommended.
+- The agent now uses `.bind_tools` instead of `.bind_functions` for tool integration.
 
 ---
 
