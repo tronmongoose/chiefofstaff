@@ -1,10 +1,13 @@
 # Personal AI Agent
 
-A LangGraph-powered AI agent that can handle weather queries, todo lists, and general conversation.
+A LangGraph-powered AI agent that can handle weather queries, flight searches, travel recommendations, and general conversation.
 
 ## 🚀 Features
 
 - **Weather Tool**: Get real-time weather information for any location
+- **Flight Search**: Search for flights between airports with pricing
+- **Airport Information**: Get details about airports using IATA codes
+- **Travel Recommendations**: Get activities and points of interest for cities
 - **Todo List**: Access and display your todo list
 - **General Conversation**: Natural language responses for non-tool queries
 - **Simple Architecture**: Clean, maintainable code structure
@@ -18,6 +21,7 @@ A LangGraph-powered AI agent that can handle weather queries, todo lists, and ge
 | langchain-openai | 0.3.23+  | OpenAI LLM integration |
 | openai           | 1.86.0+  | Direct OpenAI SDK      |
 | python-dotenv    | 1.0.1+   | API key management     |
+| amadeus          | 8.1.0+   | Flight & travel API    |
 
 ## 📁 Project Structure
 
@@ -25,12 +29,13 @@ A LangGraph-powered AI agent that can handle weather queries, todo lists, and ge
 my-langgraph-project/
 │
 ├── main.py          # Main LangGraph agent code
-├── tools.py         # Tool definitions (weather, todo)
+├── tools.py         # Tool definitions (weather, flights, travel)
 ├── state.py         # Shared AgentState type
 ├── nodes/           # Graph nodes
 │   ├── planner.py   # Task planning and tool call generation
 │   └── executor.py  # Tool execution and response generation
 ├── .env             # API keys (not committed)
+├── env_template.txt # Environment variables template
 └── requirements.txt # Python dependencies
 ```
 
@@ -40,7 +45,7 @@ The agent uses a simple two-node graph:
 
 1. **Planner Node**: 
    - Analyzes user input
-   - Generates appropriate tool calls for weather/todo queries
+   - Generates appropriate tool calls for weather/flight/travel queries
    - Handles general conversation
 
 2. **Executor Node**:
@@ -59,8 +64,12 @@ The agent uses a simple two-node graph:
    Create a `.env` file with:
    ```
    OPENAI_API_KEY=sk-...
-   OPENWEATHER_API_KEY=your-key-here
+   AMADEUS_API_KEY=your-amadeus-api-key
+   AMADEUS_API_SECRET=your-amadeus-api-secret
+   OPENWEATHER_API_KEY=your-openweather-key
    ```
+   
+   See `env_template.txt` for the complete template.
 
 3. **Run the agent:**
    ```bash
@@ -73,15 +82,43 @@ The agent uses a simple two-node graph:
 You: What's the weather in San Diego?
 AI: The weather in San Diego is 72°F with clear sky.
 
+You: Search for flights from LAX to JFK on 2024-03-15
+AI: Found 15 flights from LAX to JFK on 2024-03-15:
+1. AA - $245.50
+2. DL - $267.80
+3. UA - $289.90
+
+You: Tell me about JFK airport
+AI: Airport: John F. Kennedy International Airport (JFK)
+Location: New York, United States
+
+You: What are some activities in Paris?
+AI: Travel recommendations for Paris:
+1. Eiffel Tower Skip-the-Line Tour - $45.00
+2. Louvre Museum Guided Tour - $65.00
+3. Seine River Cruise - $25.00
+
 You: Show me my todo list
 AI: Erik's todo list:
 1) Build agent
 2) Test LangGraph
 3) Deploy system
-
-You: How are you today?
-AI: I'm just a computer program, but I'm here and ready to help you! How can I assist you today?
 ```
+
+## 🛫 Amadeus API Tools
+
+The agent now includes powerful travel tools powered by the Amadeus API:
+
+- **Flight Search**: Search for flights with pricing and airline information
+- **Airport Info**: Get detailed information about airports worldwide
+- **Travel Recommendations**: Discover activities and attractions in cities
+
+### Getting Amadeus API Credentials
+
+1. Visit [Amadeus for Developers](https://developers.amadeus.com/)
+2. Create a free account
+3. Create a new application to get your API key and secret
+4. Add them to your `.env` file
 
 ## 📝 Development Phases
 
@@ -96,15 +133,16 @@ AI: I'm just a computer program, but I'm here and ready to help you! How can I a
 - Fixed recursion issues
 - Added proper error handling
 
-### Phase 3: Current State
-- Clean, working implementation
-- Direct tool call generation
-- Natural conversation handling
-- Stable execution flow
+### Phase 3: Travel Integration
+- Added Amadeus API integration
+- Implemented flight search capabilities
+- Added airport information tool
+- Added travel recommendations tool
 
 ## ⚠️ Notes
 - The agent uses GPT-4 for optimal performance
 - Weather data comes from OpenWeather API
+- Flight and travel data comes from Amadeus API
 - Todo list is currently hardcoded (can be expanded to use a database)
 
 ## 📝 Version Control

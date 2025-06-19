@@ -1,0 +1,11 @@
+# Copy this content to a .env file in your project root
+
+# OpenAI API Key
+OPENAI_API_KEY=your_openai_api_key_here
+
+# Amadeus API Credentials
+AMADEUS_API_KEY=your_amadeus_api_key_here
+AMADEUS_API_SECRET=your_amadeus_api_secret_here
+
+# OpenWeather API Key (optional)
+OPENWEATHER_API_KEY=your_openweather_api_key_here 

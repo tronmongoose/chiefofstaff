@@ -55,9 +55,69 @@ def plan_tasks(state: AgentState) -> AgentState:
         }]
         return state
 
+    # For flight search queries, directly create a tool call
+    if "flight" in user_goal.lower() and ("search" in user_goal.lower() or "from" in user_goal.lower() and "to" in user_goal.lower()):
+        # Try to extract origin, destination, and date
+        import re
+        # Look for airport codes (3 letters) - be more specific about context
+        # Look for patterns like "from LAX to JFK" or "LAX to JFK"
+        flight_pattern = re.search(r'from\s+([A-Z]{3})\s+to\s+([A-Z]{3})', user_goal.upper())
+        if not flight_pattern:
+            flight_pattern = re.search(r'([A-Z]{3})\s+to\s+([A-Z]{3})', user_goal.upper())
+        
+        # Look for date pattern (YYYY-MM-DD or similar)
+        date_match = re.search(r'\b\d{4}-\d{2}-\d{2}\b', user_goal)
+        
+        if flight_pattern and date_match:
+            origin = flight_pattern.group(1)
+            destination = flight_pattern.group(2)
+            date = date_match.group()
+            state["tool_calls"] = [{
+                "function": {
+                    "name": "search_flights",
+                    "arguments": f'{{"origin":"{origin}","destination":"{destination}","departure_date":"{date}"}}'
+                }
+            }]
+            return state
+
+    # For airport info queries, directly create a tool call
+    if "airport" in user_goal.lower() or any(word in user_goal.upper() for word in ["LAX", "JFK", "LHR", "CDG", "NRT", "SFO", "ORD", "ATL"]):
+        import re
+        airports = re.findall(r'\b[A-Z]{3}\b', user_goal.upper())
+        if airports:
+            airport_code = airports[0]
+            state["tool_calls"] = [{
+                "function": {
+                    "name": "get_airport_info",
+                    "arguments": f'{{"airport_code":"{airport_code}"}}'
+                }
+            }]
+            return state
+
+    # For travel recommendations queries, directly create a tool call
+    if any(word in user_goal.lower() for word in ["activities", "attractions", "things to do", "recommendations"]) and "in " in user_goal.lower():
+        city = user_goal.lower().split("in ")[-1].strip()
+        # Remove common words that might be at the end
+        city = city.split()[0] if city else ""
+        if city:
+            state["tool_calls"] = [{
+                "function": {
+                    "name": "get_travel_recommendations",
+                    "arguments": f'{{"city":"{city}"}}'
+                }
+            }]
+            return state
+
     # For other queries, use the LLM to generate a response
     prompt = f"""
-You are a helpful assistant. Please respond to the following user request:
+You are a helpful assistant. You have access to the following tools:
+- get_weather: for weather, forecast, temperature, or climate questions
+- get_todo_list: for todo list queries
+- search_flights: for flight searches between airports (use IATA codes like LAX, JFK)
+- get_airport_info: for airport information using IATA codes
+- get_travel_recommendations: for travel activities and attractions in cities
+
+Please respond to the following user request:
 
 User request: {user_goal}
 """
