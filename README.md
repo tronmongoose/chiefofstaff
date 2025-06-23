@@ -5,11 +5,13 @@ A LangGraph-powered AI agent that can handle weather queries, flight searches, t
 ## 🚀 Features
 
 - **Weather Tool**: Get real-time weather information for any location
-- **Flight Search**: Search for flights between airports with pricing
-- **Airport Information**: Get details about airports using IATA codes
-- **Travel Recommendations**: Get activities and points of interest for cities
+- **Flight Search**: Search for flights between airports with pricing and airline details
+- **Airport Information**: Get detailed information about airports using IATA codes
+- **Travel Recommendations**: Get activities and points of interest for popular cities
 - **Todo List**: Access and display your todo list
 - **General Conversation**: Natural language responses for non-tool queries
+- **Memory System**: Maintains conversation history across sessions
+- **Vector Retrieval**: RAG system with knowledge base integration
 - **Simple Architecture**: Clean, maintainable code structure
 
 ## 🛠️ Tech Stack
@@ -22,45 +24,67 @@ A LangGraph-powered AI agent that can handle weather queries, flight searches, t
 | openai           | 1.86.0+  | Direct OpenAI SDK      |
 | python-dotenv    | 1.0.1+   | API key management     |
 | amadeus          | 8.1.0+   | Flight & travel API    |
+| chromadb         | 0.4.24+  | Vector database        |
+| requests         | 2.31.0+  | HTTP requests          |
 
 ## 📁 Project Structure
 
 ```bash
 my-langgraph-project/
 │
-├── main.py          # Main LangGraph agent code
-├── tools.py         # Tool definitions (weather, flights, travel)
-├── state.py         # Shared AgentState type
-├── nodes/           # Graph nodes
-│   ├── planner.py   # Task planning and tool call generation
-│   └── executor.py  # Tool execution and response generation
-├── .env             # API keys (not committed)
-├── env_template.txt # Environment variables template
-└── requirements.txt # Python dependencies
+├── main.py              # Main LangGraph agent code
+├── tools.py             # Tool definitions (weather, flights, travel)
+├── state.py             # Shared AgentState type
+├── memory.py            # Conversation memory system
+├── retrieval.py         # Vector store and RAG system
+├── nodes/               # Graph nodes
+│   ├── planner.py       # Task planning and tool call generation
+│   └── executor.py      # Tool execution and response generation
+├── .env                 # API keys (not committed)
+├── env_template.txt     # Environment variables template
+├── test_tools.py        # Test script for all tools
+├── knowledge.txt        # Knowledge base for RAG
+├── requirements.txt     # Python dependencies
+└── README.md           # This file
 ```
 
 ## 🧠 How It Works
 
-The agent uses a simple two-node graph:
+The agent uses a sophisticated multi-component architecture:
 
 1. **Planner Node**: 
-   - Analyzes user input
-   - Generates appropriate tool calls for weather/flight/travel queries
-   - Handles general conversation
+   - Analyzes user input using pattern matching and LLM
+   - Generates appropriate tool calls for specific queries
+   - Handles flight searches, weather, travel recommendations, etc.
+   - Falls back to general conversation for non-tool queries
 
 2. **Executor Node**:
-   - Executes tool calls
-   - Generates natural language responses
-   - Manages tool results
+   - Executes tool calls with proper error handling
+   - Generates natural language responses from tool results
+   - Manages tool execution and response formatting
+
+3. **Memory System**:
+   - Maintains conversation history across sessions
+   - Integrates with LangChain's memory components
+
+4. **Retrieval System**:
+   - Vector store for document retrieval
+   - RAG capabilities for knowledge base queries
 
 ## 🚀 Getting Started
 
-1. **Install dependencies:**
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/tronmongoose/chiefofstaff.git
+   cd chiefofstaff
+   ```
+
+2. **Install dependencies:**
    ```bash
    pip install -r requirements.txt
    ```
 
-2. **Set up your API keys:**
+3. **Set up your API keys:**
    Create a `.env` file with:
    ```
    OPENAI_API_KEY=sk-...
@@ -71,7 +95,12 @@ The agent uses a simple two-node graph:
    
    See `env_template.txt` for the complete template.
 
-3. **Run the agent:**
+4. **Test the tools (optional):**
+   ```bash
+   python3 test_tools.py
+   ```
+
+5. **Run the agent:**
    ```bash
    python3 main.py
    ```
@@ -79,24 +108,25 @@ The agent uses a simple two-node graph:
 ## 💬 Example Usage
 
 ```
-You: What's the weather in San Diego?
-AI: The weather in San Diego is 72°F with clear sky.
+You: What's the weather in San Francisco?
+AI: The weather in San Francisco is 60.64°F with few clouds.
 
-You: Search for flights from LAX to JFK on 2024-03-15
-AI: Found 15 flights from LAX to JFK on 2024-03-15:
-1. AA - $245.50
-2. DL - $267.80
-3. UA - $289.90
+You: Search for flights from LAX to JFK on 2025-07-15
+AI: Found 58 flights from LAX to JFK on 2025-07-15:
+1. F9 - $107.85
+2. B6 - $129.35
+3. AS - $136.68
+4. AS - $136.68
+5. B6 - $137.95
 
-You: Tell me about JFK airport
-AI: Airport: John F. Kennedy International Airport (JFK)
-Location: New York, United States
+You: Tell me about LAX airport
+AI: Airport: LOS ANGELES INTL (LAX)
+Location: LOS ANGELES, UNITED STATES OF AMERICA
 
 You: What are some activities in Paris?
 AI: Travel recommendations for Paris:
-1. Eiffel Tower Skip-the-Line Tour - $45.00
-2. Louvre Museum Guided Tour - $65.00
-3. Seine River Cruise - $25.00
+Popular attractions in Paris: Eiffel Tower, Louvre Museum, Notre-Dame Cathedral, 
+Champs-Élysées, Arc de Triomphe, Seine River Cruise, Palace of Versailles
 
 You: Show me my todo list
 AI: Erik's todo list:
@@ -107,11 +137,20 @@ AI: Erik's todo list:
 
 ## 🛫 Amadeus API Tools
 
-The agent now includes powerful travel tools powered by the Amadeus API:
+The agent includes powerful travel tools powered by the Amadeus API:
 
 - **Flight Search**: Search for flights with pricing and airline information
+  - Supports IATA airport codes (LAX, JFK, LHR, etc.)
+  - Returns pricing and airline details
+  - Handles future dates for booking
+
 - **Airport Info**: Get detailed information about airports worldwide
+  - Provides airport names and locations
+  - Supports all major international airports
+
 - **Travel Recommendations**: Discover activities and attractions in cities
+  - Covers popular destinations (Paris, London, New York, Tokyo, Rome)
+  - Provides curated attraction lists
 
 ### Getting Amadeus API Credentials
 
@@ -120,30 +159,67 @@ The agent now includes powerful travel tools powered by the Amadeus API:
 3. Create a new application to get your API key and secret
 4. Add them to your `.env` file
 
+## 🧪 Testing
+
+Run the comprehensive test suite to verify all tools are working:
+
+```bash
+python3 test_tools.py
+```
+
+This will test:
+- ✅ Amadeus API credentials
+- ✅ Flight search functionality
+- ✅ Airport information retrieval
+- ✅ Travel recommendations
+- ✅ Weather tool
+- ✅ Todo list tool
+
 ## 📝 Development Phases
 
-### Phase 1: Basic Setup
+### Phase 1: Basic Setup ✅
 - Set up project structure
 - Implement basic tools (weather, todo)
 - Create initial graph structure
 
-### Phase 2: Graph Refinement
+### Phase 2: Graph Refinement ✅
 - Simplified graph to two nodes
 - Improved tool call handling
 - Fixed recursion issues
 - Added proper error handling
 
-### Phase 3: Travel Integration
+### Phase 3: Travel Integration ✅
 - Added Amadeus API integration
 - Implemented flight search capabilities
 - Added airport information tool
 - Added travel recommendations tool
+- Enhanced planner with pattern matching
+- Added comprehensive testing
+
+### Phase 4: Current State ✅
+- All tools tested and working
+- Robust error handling
+- Clean codebase structure
+- Comprehensive documentation
+- Ready for production use
+
+## 🔧 Available Tools
+
+| Tool | Description | Example Query |
+|------|-------------|---------------|
+| `get_weather` | Real-time weather data | "What's the weather in Tokyo?" |
+| `search_flights` | Flight search with pricing | "Search for flights from LAX to JFK on 2025-07-15" |
+| `get_airport_info` | Airport details | "Tell me about LAX airport" |
+| `get_travel_recommendations` | City attractions | "What are some activities in Paris?" |
+| `get_todo_list` | Personal todo list | "Show me my todo list" |
 
 ## ⚠️ Notes
 - The agent uses GPT-4 for optimal performance
 - Weather data comes from OpenWeather API
 - Flight and travel data comes from Amadeus API
 - Todo list is currently hardcoded (can be expanded to use a database)
+- Memory system maintains conversation context
+- Vector store provides RAG capabilities
 
 ## 📝 Version Control
 - **Do NOT commit your `.env` file**
@@ -151,4 +227,17 @@ The agent now includes powerful travel tools powered by the Amadeus API:
   ```
   .env
   __pycache__/
+  chroma_db/
   ```
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test with `python3 test_tools.py`
+5. Submit a pull request
+
+## 📄 License
+
+This project is open source and available under the MIT License.
