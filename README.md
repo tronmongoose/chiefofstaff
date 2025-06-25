@@ -1,3 +1,14 @@
+# Project Status
+
+**This project is complete and ready for demo or future development.**
+
+- All setup, troubleshooting, and launch instructions are included below.
+- Both backend and frontend are fully integrated and tested.
+- Chroma database reset and dependency pinning are documented.
+- Thank you to all contributors and testers!
+
+---
+
 # Personal AI Agent
 
 A LangGraph-powered AI agent that can handle weather queries, flight searches, travel recommendations, wallet management, and general conversation.
@@ -289,3 +300,57 @@ Example queries that will trigger wallet balance checking:
 - "What's my crypto balance?"
 - "Show me my Coinbase account"
 - "How much Bitcoin do I have?"
+
+## Backend Setup
+
+To run the backend server, always use the following command to ensure compatibility with CDP wallet operations and IPFS posting:
+
+```bash
+uvicorn backend:app --reload --host 0.0.0.0 --port 8000 --loop asyncio
+```
+
+This ensures the default asyncio event loop is used instead of uvloop, which is required for proper operation.
+
+## Troubleshooting
+
+**Chroma Database Errors:**
+If you encounter `sqlite3.OperationalError` related to missing columns, delete your local Chroma database directory (usually `chroma_db/`) and restart the backend to rebuild the schema.
+
+## Full Local Setup & Troubleshooting Guide
+
+### 1. Backend (FastAPI/Uvicorn)
+- Always start the backend with the default asyncio event loop:
+  ```bash
+  uvicorn backend:app --reload --host 0.0.0.0 --port 8000 --loop asyncio
+  ```
+- Or use the provided script:
+  ```bash
+  ./start_backend.sh
+  ```
+  This script will:
+  1. Stop any running Uvicorn processes
+  2. Wait 2 seconds
+  3. Start the backend with the correct event loop
+
+### 2. Frontend (Streamlit)
+- In a separate terminal, run:
+  ```bash
+  streamlit run streamlit_app.py
+  ```
+- If port 8501 is busy, terminate any running Streamlit processes:
+  ```bash
+  pkill -f streamlit
+  streamlit run streamlit_app.py
+  ```
+- The app will be accessible at [http://localhost:8501](http://localhost:8501) and is configured to talk to the backend at [http://localhost:8000](http://localhost:8000).
+
+### 3. Resetting the Chroma Database
+- If you encounter `sqlite3.OperationalError` related to missing columns, delete your local Chroma database directory (usually `chroma_db/`) and restart the backend to rebuild the schema:
+  ```bash
+  rm -rf chroma_db
+  ./start_backend.sh
+  ```
+
+### 4. General Notes
+- Always use `--loop asyncio` for backend compatibility with CDP wallet and IPFS.
+- No other changes are needed for the backend, Streamlit app, or IPFS logic.

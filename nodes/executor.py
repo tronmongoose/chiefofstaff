@@ -41,6 +41,28 @@ def execute_next_task(state: AgentState) -> AgentState:
         if tool_name == "upload_to_ipfs_tool":
             print("[executor.py] Routing to upload_to_ipfs directly...")
             result = upload_to_ipfs(tool_args)
+        # Automatically upload travel recommendations to IPFS
+        elif tool_name == "get_travel_recommendations":
+            tool = tool_map[tool_name]
+            print(f"[executor.py] Invoking tool: {tool_name}")
+            result = tool.invoke(tool_args)
+            # Prepare payload for IPFS
+            ipfs_payload = {
+                "city": tool_args.get("city"),
+                "user_input": state.get("input"),
+                "recommendations": result,
+                "timestamp": int(time.time())
+            }
+            try:
+                ipfs_hash = upload_to_ipfs(ipfs_payload)
+                print(f"[executor.py] Posted travel recommendations to IPFS: {ipfs_hash}")
+                state["travel_ipfs_hash"] = ipfs_hash
+            except Exception as e:
+                print(f"[executor.py] Error posting travel recommendations to IPFS: {e}")
+                ipfs_hash = None
+            # Append IPFS info in Markdown format
+            if ipfs_hash:
+                result += f"\n\n---\n**🌐 This travel plan has been posted to IPFS:** [View on IPFS](https://gateway.pinata.cloud/ipfs/{ipfs_hash})\n\n`{ipfs_hash}`\n---"
         else:
             tool = tool_map[tool_name]
             print(f"[executor.py] Invoking tool: {tool_name}")

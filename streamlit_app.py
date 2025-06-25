@@ -6,6 +6,10 @@ import time
 import json
 import re
 
+# Helper function for sample address buttons
+def set_referral_search_input(value):
+    st.session_state['referral_search_input'] = value
+
 # Page configuration
 st.set_page_config(
     page_title="AI Agent Wallet Demo",
@@ -284,6 +288,107 @@ with col3:
                     st.error(f"❌ HTTP Error: {response.status_code}")
             except Exception as e:
                 st.error(f"❌ Connection failed: {str(e)}")
+
+# Decentralized Referral Verification
+st.markdown("<h2 class='section-header'>🔍 Decentralized Referral Verification</h2>", unsafe_allow_html=True)
+
+st.markdown("""
+<div class="info-box">
+    <h4 style="margin-top:0;">🌐 How Decentralized Referral Verification Works:</h4>
+    <ul>
+        <li><b>Pseudonymous:</b> Referrals are stored on IPFS with wallet addresses only</li>
+        <li><b>Verifiable:</b> Anyone can search and verify referral records by wallet address</li>
+        <li><b>Immutable:</b> Records are permanently stored on the decentralized IPFS network</li>
+        <li><b>Transparent:</b> All referral data is publicly accessible and auditable</li>
+    </ul>
+</div>
+""", unsafe_allow_html=True)
+
+# Referral search interface
+st.markdown("### 🔍 Search Referral Records by Wallet Address")
+
+# Create two columns for the search interface
+search_col1, search_col2 = st.columns([3, 1])
+
+with search_col1:
+    wallet_address = st.text_input(
+        "Enter wallet address to search:",
+        placeholder="0x1234... or alice.eth",
+        key="referral_search_input"
+    )
+
+with search_col2:
+    search_button = st.button("🔍 Search", use_container_width=True)
+
+# Sample wallet addresses for easy testing
+st.markdown("**💡 Try these sample addresses:**")
+sample_col1, sample_col2, sample_col3 = st.columns(3)
+with sample_col1:
+    st.button("alice.eth", key="sample_alice", on_click=set_referral_search_input, args=("alice.eth",))
+with sample_col2:
+    st.button("bob.eth", key="sample_bob", on_click=set_referral_search_input, args=("bob.eth",))
+with sample_col3:
+    st.button("0xE132d512FC35Bf91aD0C1098031CE09A9BA95241", key="sample_mainnet", on_click=set_referral_search_input, args=("0xE132d512FC35Bf91aD0C1098031CE09A9BA95241",))
+
+# Handle search
+if search_button and wallet_address:
+    with st.spinner('🔍 Searching decentralized referral records...'):
+        try:
+            response = requests.get(f"http://localhost:8000/referrals/{wallet_address}")
+            
+            if response.status_code == 200:
+                result = response.json()
+                
+                if result.get("status") == "success":
+                    records = result.get("response", [])
+                    
+                    if records:
+                        st.markdown(f"""
+                        <div class="success-box">
+                            <h4 style='margin-top:0;'>✅ Found {len(records)} referral record(s) for {wallet_address}</h4>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        # Display each referral record
+                        for i, record in enumerate(records, 1):
+                            with st.expander(f"📋 Referral Record {i} - {record.get('timestamp', 'Unknown Date')}"):
+                                st.markdown(f"**🔗 IPFS Hash:** `{record.get('ipfs_hash', 'N/A')}`")
+                                st.markdown(f"**💰 Referrer Wallet:** `{record.get('referrer_wallet', 'N/A')}`")
+                                st.markdown(f"**🎯 Referred Wallet:** `{record.get('referred_wallet', 'N/A')}`")
+                                st.markdown(f"**💸 Payment Amount:** `{record.get('payment_amount', 'N/A')}`")
+                                st.markdown(f"**📅 Timestamp:** `{record.get('timestamp', 'N/A')}`")
+                                
+                                # Add IPFS link if available
+                                ipfs_hash = record.get('ipfs_hash')
+                                if ipfs_hash:
+                                    st.markdown(f"**🔗 View on IPFS:** [Open Record](https://gateway.pinata.cloud/ipfs/{ipfs_hash})")
+                                
+                                # Add verification status
+                                st.markdown("**✅ Verification Status:** This record is verified and immutable on the decentralized IPFS network")
+                    else:
+                        st.markdown(f"""
+                        <div class="info-box">
+                            <h4 style='margin-top:0;'>📭 No referral records found</h4>
+                            <p>No referral records were found for wallet address: <code>{wallet_address}</code></p>
+                            <p>This could mean:</p>
+                            <ul>
+                                <li>The wallet hasn't participated in any referrals yet</li>
+                                <li>The wallet address might be incorrect</li>
+                                <li>Records might be stored under a different address format</li>
+                            </ul>
+                        </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.markdown(f"""
+                    <div class="error-box">
+                        <h4>❌ Search Error:</h4>
+                        <p>{result.get('response', 'An error occurred while searching referral records.')}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.error(f"❌ HTTP Error: {response.status_code}")
+        except Exception as e:
+            st.error(f"❌ Connection failed: {str(e)}")
 
 # Footer
 st.markdown("---")

@@ -149,4 +149,4 @@ async def get_referrals(wallet_address: str):
         return {"status": "error", "response": "Failed to retrieve referrals.", "error": str(e)}
 
 if __name__ == "__main__":
-    uvicorn.run("backend:app", host="0.0.0.0", port=8000, reload=True) 
+    uvicorn.run("backend:app", host="0.0.0.0", port=8000, reload=True, loop="asyncio") 
