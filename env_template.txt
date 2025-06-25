@@ -8,4 +8,8 @@ AMADEUS_API_KEY=your_amadeus_api_key_here
 AMADEUS_API_SECRET=your_amadeus_api_secret_here
 
 # OpenWeather API Key (optional)
-OPENWEATHER_API_KEY=your_openweather_api_key_here 
+OPENWEATHER_API_KEY=your_openweather_api_key_here
+
+# Coinbase CDP API Credentials
+COINBASE_API_KEY=your_coinbase_api_key_here
+COINBASE_API_SECRET=your_coinbase_api_secret_here 

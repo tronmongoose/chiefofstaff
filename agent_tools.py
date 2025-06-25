@@ -3,6 +3,8 @@ import requests
 from langchain_core.tools import tool
 from dotenv import load_dotenv
 from amadeus import Client, ResponseError
+from tools.payment import WALLET_TOOLS
+from tools.ipfs import retrieve_referrals_by_wallet
 
 load_dotenv()
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
@@ -143,4 +145,19 @@ def get_todo_list() -> str:
     """Returns Erik's current todo list."""
     return "Erik's todo list:\n1) Build agent\n2) Test LangGraph\n3) Deploy system"
 
-TOOLS = [get_weather, search_flights, get_airport_info, get_travel_recommendations, get_todo_list] 
+@tool
+def retrieve_referrals_by_wallet_tool(wallet_address: str) -> str:
+    """
+    Retrieve referral records from IPFS by wallet address.
+    Args:
+        wallet_address (str): The wallet address to search for (referrer or referee).
+    Returns:
+        str: JSON string of matching referral records.
+    """
+    try:
+        records = retrieve_referrals_by_wallet(wallet_address)
+        return str(records)
+    except Exception as e:
+        return f"Error retrieving referrals: {str(e)}"
+
+TOOLS = [get_weather, search_flights, get_airport_info, get_travel_recommendations, get_todo_list, retrieve_referrals_by_wallet_tool] + WALLET_TOOLS 

@@ -1,0 +1,10 @@
+Erik Huckle is building a personal AI agent.
+He wants it to serve as a Chief of Staff.
+He uses LangGraph and Cursor IDE.
+We built a decentralized, anonymous travel referral agent that lets anyone—without social verification or corporate approval—refer trips, earn automated crypto payments, and post referral records on IPFS.
+
+Our agent uses:
+x402 payments to enforce pay-per-use monetization and automatically split referral fees.
+CDP Wallets to route payments directly to referrers with no intermediaries.
+IPFS storage to maintain a decentralized, pseudonymous referral history—creating reputation without sacrificing privacy.
+This creates a new travel ecosystem where contributors get rewarded directly and transparently, while preserving anonymity and bypassing centralized gatekeepers like Booking.com and Expedia
