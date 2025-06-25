@@ -1,10 +1,26 @@
+# Core Python Libraries
+fastapi==0.110.1
+uvicorn==0.29.0
+requests==2.31.0
+python-dotenv==1.0.1
+numpy==1.26.4
+
+# LangGraph and LangChain Components
+langgraph==0.0.33
 langchain==0.3.25
 langchain-core==0.3.65
 langchain-openai==0.3.23
-langchain-community==0.3.25
-openai>=1.68.2,<2.0.0
-python-dotenv==1.0.1
-tiktoken>=0.7.0,<1.0.0
+openai==1.23.6
+langchain_chroma==0.2.4
+
+# Streamlit Frontend
+streamlit==1.46.0
+
+# Coinbase CDP SDK
+cdp-sdk==1.15.0
+
+# Vector Store
 chromadb==0.4.24
-requests==2.31.0
-amadeus==8.1.0
+
+# Optional: If you used asyncio workaround
+nest_asyncio==1.6.0

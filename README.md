@@ -1,6 +1,14 @@
 # Personal AI Agent
 
-A LangGraph-powered AI agent that can handle weather queries, flight searches, travel recommendations, and general conversation.
+A LangGraph-powered AI agent that can handle weather queries, flight searches, travel recommendations, wallet management, and general conversation.
+
+## 🛠️ Recent Troubleshooting & Dependency Updates
+
+- **Coinbase CDP SDK Import Error:** Fixed `ImportError: cannot import name 'CdpClient' from 'cdp'` by uninstalling the incorrect `cdp` package and installing the correct `cdp-sdk` package (`cdp-sdk==1.15.0`).
+- **NumPy/ChromaDB Compatibility:** Resolved `AttributeError: np.float_ was removed in the NumPy 2.0 release` by pinning NumPy to a compatible version. Later, installing `langchain_chroma` upgraded NumPy to 2.3.1, which is compatible with the latest ChromaDB.
+- **ChromaDB Integration:** Added `langchain_chroma==0.2.4` to requirements for Python 3.13 compatibility.
+- **Backend/Frontend Port Mismatch:** Fixed frontend connection errors by restarting the backend on port 8000 to match the frontend's expectations.
+- **General:** Updated `requirements.txt` to reflect all dependency changes. Backend and wallet/payment features are now fully operational. Only minor warning: LangChain memory deprecation (not blocking).
 
 ## 🚀 Features
 
@@ -8,6 +16,7 @@ A LangGraph-powered AI agent that can handle weather queries, flight searches, t
 - **Flight Search**: Search for flights between airports with pricing and airline details
 - **Airport Information**: Get detailed information about airports using IATA codes
 - **Travel Recommendations**: Get activities and points of interest for popular cities
+- **Wallet Management**: Check cryptocurrency balances from Coinbase CDP API
 - **Todo List**: Access and display your todo list
 - **General Conversation**: Natural language responses for non-tool queries
 - **Memory System**: Maintains conversation history across sessions
@@ -33,13 +42,17 @@ A LangGraph-powered AI agent that can handle weather queries, flight searches, t
 my-langgraph-project/
 │
 ├── main.py              # Main LangGraph agent code
-├── tools.py             # Tool definitions (weather, flights, travel)
+├── agent_tools.py       # Tool definitions (weather, flights, travel, wallet)
+├── wallet.py            # Coinbase CDP API integration
 ├── state.py             # Shared AgentState type
 ├── memory.py            # Conversation memory system
 ├── retrieval.py         # Vector store and RAG system
 ├── nodes/               # Graph nodes
 │   ├── planner.py       # Task planning and tool call generation
 │   └── executor.py      # Tool execution and response generation
+├── tools/               # Tool modules
+│   ├── __init__.py      # Package initialization
+│   └── payment.py       # Wallet and payment tools
 ├── .env                 # API keys (not committed)
 ├── env_template.txt     # Environment variables template
 ├── test_tools.py        # Test script for all tools
@@ -91,6 +104,8 @@ The agent uses a sophisticated multi-component architecture:
    AMADEUS_API_KEY=your-amadeus-api-key
    AMADEUS_API_SECRET=your-amadeus-api-secret
    OPENWEATHER_API_KEY=your-openweather-key
+   COINBASE_API_KEY=your-coinbase-api-key
+   COINBASE_API_SECRET=your-coinbase-api-secret
    ```
    
    See `env_template.txt` for the complete template.
@@ -133,6 +148,12 @@ AI: Erik's todo list:
 1) Build agent
 2) Test LangGraph
 3) Deploy system
+
+You: Check my wallet balance
+AI: Wallet Balances:
+- Bitcoin Wallet (VAULT): 0.00123456 BTC
+- Ethereum Wallet (VAULT): 0.5 ETH
+- USDC Wallet (VAULT): 1000.00 USDC
 ```
 
 ## 🛫 Amadeus API Tools
@@ -241,3 +262,30 @@ This will test:
 ## 📄 License
 
 This project is open source and available under the MIT License.
+
+## 💰 Wallet Management
+
+The agent includes cryptocurrency wallet management powered by the Coinbase CDP API:
+
+- **Balance Checking**: View all cryptocurrency account balances
+  - Supports multiple account types (VAULT, TRADING, etc.)
+  - Shows currency and value for each account
+  - Handles API errors gracefully
+
+### Getting Coinbase CDP API Credentials
+
+1. Visit [Coinbase Developer Portal](https://developers.coinbase.com/)
+2. Create a new application
+3. Generate API credentials with appropriate permissions
+4. Add them to your `.env` file
+
+### Wallet Tool Usage
+
+The `check_wallet_balance` tool automatically routes queries containing:
+- "wallet", "balance", "crypto", "bitcoin", "ethereum", "coinbase", "account"
+
+Example queries that will trigger wallet balance checking:
+- "Check my wallet balance"
+- "What's my crypto balance?"
+- "Show me my Coinbase account"
+- "How much Bitcoin do I have?"
