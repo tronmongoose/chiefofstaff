@@ -82,142 +82,34 @@ with col2:
     st.image("assistant.png", width=150)
     st.markdown("<h3 style='text-align: center;'>🤖 AI Agent Wallet Assistant</h3>", unsafe_allow_html=True)
 
-st.markdown("<h1 class='main-header'>💸 AI Agent Wallet Demo</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; font-size: 1.2rem;'>LangGraph Agent + Wallet + IPFS Integration</p>", unsafe_allow_html=True)
+# Minimal Travel Planner UI
+st.markdown("<h1 class='main-header'>✈️ Autonomous Travel Planner</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; font-size: 1.2rem;'>Enter your destination and budget to generate a complete travel plan.</p>", unsafe_allow_html=True)
 
-# Sidebar
-st.sidebar.markdown("## 🎛️ Quick Actions")
-st.sidebar.markdown("Use these quick actions to test the system:")
+with st.form("travel_form"):
+    destination = st.text_input("Destination", placeholder="e.g. Paris")
+    budget = st.number_input("Budget (USD or ETH)", min_value=0.0, step=10.0, format="%.2f")
+    submit = st.form_submit_button("Generate Travel Plan")
 
-# Quick action buttons in sidebar
-if st.sidebar.button("🔍 Check Wallet Balance", use_container_width=True):
-    with st.spinner('Fetching wallet balance...'):
-        try:
-            response = requests.get("http://localhost:8000/wallet-balance")
-            if response.status_code == 200:
-                result = response.json()
-                if result.get("status") == "success":
-                    st.sidebar.success(f"💰 {result['response']}")
+if submit:
+    if not destination or budget <= 0:
+        st.error("Please enter a valid destination and budget.")
+    else:
+        with st.spinner('Generating your travel plan...'):
+            try:
+                payload = {"destination": destination, "budget": budget}
+                response = requests.post("http://localhost:8000/agent", json=payload)
+                if response.status_code == 200:
+                    result = response.json()
+                    if result.get("status") == "success":
+                        st.success("Travel plan generated!")
+                        st.markdown(result["response"])
+                    else:
+                        st.error(result.get("response", "Error generating travel plan."))
                 else:
-                    st.sidebar.error(f"❌ {result.get('response', 'Error fetching balance')}")
-            else:
-                st.sidebar.error(f"❌ HTTP Error: {response.status_code}")
-        except Exception as e:
-            st.sidebar.error(f"❌ Connection failed: {str(e)}")
-
-if st.sidebar.button("🌤️ Check Weather", use_container_width=True):
-    with st.spinner('Getting weather information...'):
-        try:
-            payload = {"input": "What is the weather in San Francisco?"}
-            response = requests.post("http://localhost:8000/agent", json=payload)
-            if response.status_code == 200:
-                result = response.json()
-                if result.get("status") == "success":
-                    st.sidebar.success(f"🌤️ {result['response'][:100]}...")
-                else:
-                    st.sidebar.error(f"❌ {result.get('response', 'Error getting weather')}")
-            else:
-                st.sidebar.error(f"❌ HTTP Error: {response.status_code}")
-        except Exception as e:
-            st.sidebar.error(f"❌ Connection failed: {str(e)}")
-
-if st.sidebar.button("📝 Test IPFS Upload", use_container_width=True):
-    with st.spinner('Uploading to IPFS...'):
-        try:
-            payload = {"input": "log to IPFS: Demo test upload from Streamlit"}
-            response = requests.post("http://localhost:8000/agent", json=payload)
-            if response.status_code == 200:
-                result = response.json()
-                if result.get("status") == "success":
-                    st.sidebar.success(f"📝 {result['response'][:100]}...")
-                else:
-                    st.sidebar.error(f"❌ {result.get('response', 'Error uploading to IPFS')}")
-            else:
-                st.sidebar.error(f"❌ HTTP Error: {response.status_code}")
-        except Exception as e:
-            st.sidebar.error(f"❌ Connection failed: {str(e)}")
-
-# Main content area
-st.markdown("<h2 class='section-header'>🎯 Demo Instructions</h2>", unsafe_allow_html=True)
-
-st.markdown("""
-<div class="info-box">
-    <h4 style="margin-top:0;">🚀 How to Use This Demo:</h4>
-    <ol>
-        <li><b>Check Wallet Balance:</b> Use the sidebar button or type "What's my wallet balance?"</li>
-        <li><b>Plan a Trip:</b> Type "Plan a trip to Paris" to see trip planning capabilities</li>
-        <li><b>Check Weather:</b> Type "What's the weather in Tokyo?" for weather information</li>
-        <li><b>Upload to IPFS:</b> Type "log to IPFS: Your message here" to upload content</li>
-        <li><b>Make Payments:</b> Type "Send 0.1 ETH to alice.eth" to test payments</li>
-    </ol>
-</div>
-""", unsafe_allow_html=True)
-
-# Chat interface
-st.markdown("<h2 class='section-header'>💬 AI Agent Chat</h2>", unsafe_allow_html=True)
-
-# Chat input
-chat_input = st.text_input(
-    "Ask me anything:",
-    placeholder="Try: 'What's my wallet balance?' or 'Plan a trip to Paris' or 'What's the weather in Tokyo?'",
-    key="chat_input"
-)
-
-# Send button
-col1, col2, col3 = st.columns([1, 1, 1])
-with col2:
-    send_button = st.button("🚀 Send to Agent", use_container_width=True)
-
-if send_button and chat_input:
-    with st.spinner('🤖 Processing your request...'):
-        try:
-            payload = {"input": chat_input}
-            response = requests.post("http://localhost:8000/agent", json=payload)
-            
-            if response.status_code == 200:
-                result = response.json()
-                
-                if result.get("status") == "success":
-                    # Add to transaction history
-                    st.session_state.transactions.append({
-                        "command": chat_input,
-                        "response": result['response'],
-                        "timestamp": time.strftime('%Y-%m-%d %H:%M:%S')
-                    })
-
-                    # Display split payment confirmation if present
-                    split_msg = None
-                    ipfs_hash = None
-                    if "successfully split between the agent and the referring wallet" in result['response']:
-                        split_msg = "The payment has been successfully split between the agent and the referring wallet as part of our decentralized referral system."
-                    ipfs_match = re.search(r'(Qm[1-9A-HJ-NP-Za-km-z]{44,})', result['response'])
-                    if ipfs_match:
-                        ipfs_hash = ipfs_match.group(1)
-
-                    # Display success response
-                    st.markdown(f"""
-                    <div class="success-box">
-                        <h4 style='margin-top:0;'>✅ Agent Response:</h4>
-                        <p style='font-size:1.1rem;'>{result['response']}</p>
-                        {f'<div style="margin-top:1em;"><b>🔗 Referral Record:</b> <a href="https://gateway.pinata.cloud/ipfs/{ipfs_hash}" target="_blank">View on IPFS</a></div>' if ipfs_hash else ''}
-                        {f'<div style="margin-top:1em; color:#1f77b4; font-weight:bold;">{split_msg}</div>' if split_msg else ''}
-                    </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    # Display error response
-                    st.markdown(f"""
-                    <div class="error-box">
-                        <h4>❌ Error:</h4>
-                        <p>{result.get('response', 'An error occurred.')}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    if result.get('error'):
-                        with st.expander("🔍 Show Error Details"):
-                            st.code(result['error'])
-            else:
-                st.error(f"❌ HTTP Error: {response.status_code}")
-        except Exception as e:
-            st.error(f"❌ Connection failed: {str(e)}")
+                    st.error(f"HTTP Error: {response.status_code}")
+            except Exception as e:
+                st.error(f"Connection failed: {str(e)}")
 
 # Transaction History
 st.markdown("<h2 class='section-header'>📋 Transaction History</h2>", unsafe_allow_html=True)

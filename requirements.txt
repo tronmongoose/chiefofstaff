@@ -7,10 +7,10 @@ numpy==1.26.4
 pydantic==2.8.2
 
 # LangGraph and LangChain Components
-langgraph==0.0.33
-langchain==0.3.25
-langchain-core==0.3.65
-langchain-openai==0.3.23
+langgraph==0.2.0
+langchain==0.0.297
+langchain-core==0.2.23
+langchain-openai==0.0.8
 openai==1.23.6
 langchain_chroma==0.2.4
 
