@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
@@ -14,7 +14,18 @@ from travel_graph import travel_app  # Import the new travel planner graph
 import uuid
 from datetime import datetime
 
+# Database imports
+from sqlalchemy.orm import Session
+from database import get_db, init_db
+from db_service import PlanService
+from models import Plan
+
 app = FastAPI(title="AI Agent Wallet API", version="1.0.0")
+
+# Initialize database on startup
+@app.on_event("startup")
+async def startup_event():
+    init_db()
 
 # Allow CORS for modern frontend frameworks
 app.add_middleware(
@@ -107,14 +118,6 @@ class AgentRequest(BaseModel):
     input: str = None
     user_input: str = None
     referrer_wallet: str = None
-
-# ============================================================================
-# In-Memory Storage for Plans (Replace with database in production)
-# ============================================================================
-
-# Store generated plans in memory (use database in production)
-generated_plans: Dict[str, Dict[str, Any]] = {}
-user_plans: Dict[str, List[str]] = {}  # user_wallet -> list of plan_ids
 
 # ============================================================================
 # Helper Functions
@@ -221,19 +224,16 @@ def format_travel_plan(state):
     return itinerary.strip()
 
 # ============================================================================
-# New API Endpoints
+# API Endpoints
 # ============================================================================
 
 @app.post("/generate_plan", response_model=GeneratePlanResponse)
-async def generate_plan(request: GeneratePlanRequest):
+async def generate_plan(request: GeneratePlanRequest, db: Session = Depends(get_db)):
     """
     Generate a travel plan based on destination and budget.
     Returns both structured data and formatted plan.
     """
     try:
-        # Generate unique plan ID
-        plan_id = str(uuid.uuid4())
-        
         # Create initial state
         state = {
             "destination": request.destination,
@@ -302,22 +302,23 @@ async def generate_plan(request: GeneratePlanRequest):
             total_cost=total_cost,
             platform_fee=platform_fee,
             grand_total=grand_total,
-            plan_id=plan_id,
-            created_at=datetime.now().isoformat()
+            plan_id="",  # Will be set after database save
+            created_at=""  # Will be set after database save
         )
         
-        # Store plan for later retrieval
-        generated_plans[plan_id] = {
-            "plan": structured_plan.dict(),
-            "state": output_state,
-            "user_wallet": request.user_wallet
-        }
+        # Save to database
+        db_plan = PlanService.create_plan(
+            db=db,
+            user_wallet=request.user_wallet or "",
+            destination=request.destination,
+            budget=int(request.budget),
+            plan_data=plan,
+            status="generated"
+        )
         
-        # Associate with user if wallet provided
-        if request.user_wallet:
-            if request.user_wallet not in user_plans:
-                user_plans[request.user_wallet] = []
-            user_plans[request.user_wallet].append(plan_id)
+        # Update structured plan with database values
+        structured_plan.plan_id = str(db_plan.id)
+        structured_plan.created_at = db_plan.created_at.isoformat() if db_plan.created_at else ""
         
         # Generate formatted plan
         formatted_plan = format_travel_plan(output_state)
@@ -335,13 +336,14 @@ async def generate_plan(request: GeneratePlanRequest):
         )
 
 @app.post("/confirm_plan", response_model=ConfirmPlanResponse)
-async def confirm_plan(request: ConfirmPlanRequest):
+async def confirm_plan(request: ConfirmPlanRequest, db: Session = Depends(get_db)):
     """
     Confirm a travel plan and process payment/booking.
     """
     try:
-        # Retrieve the stored plan
-        if request.plan_id not in generated_plans:
+        # Retrieve the plan from database
+        plan = PlanService.get_plan_by_id(db, request.plan_id)
+        if not plan:
             return ConfirmPlanResponse(
                 status="error",
                 payment_status="failed",
@@ -349,15 +351,15 @@ async def confirm_plan(request: ConfirmPlanRequest):
                 error="Invalid plan ID"
             )
         
-        stored_data = generated_plans[request.plan_id]
-        state = stored_data["state"]
-        
-        # Update state with user wallet
-        state["user_wallet"] = request.user_wallet
-        
-        # Process payment and booking confirmation
-        # This would trigger the payment processing and booking confirmation nodes
-        # For now, we'll simulate the process
+        # Update plan status to confirmed
+        updated_plan = PlanService.update_plan_status(db, request.plan_id, "confirmed")
+        if not updated_plan:
+            return ConfirmPlanResponse(
+                status="error",
+                payment_status="failed",
+                confirmation_message="Failed to update plan status",
+                error="Database update failed"
+            )
         
         # Simulate payment processing
         payment_status = "success"
@@ -369,15 +371,10 @@ async def confirm_plan(request: ConfirmPlanRequest):
             activities="confirmed"
         )
         
-        # Update stored plan with confirmation
-        generated_plans[request.plan_id]["confirmed"] = True
-        generated_plans[request.plan_id]["payment_status"] = payment_status
-        generated_plans[request.plan_id]["booking_status"] = booking_status.dict()
-        
         confirmation_message = f"""
 ✅ **Travel Plan Confirmed!**
 
-Your trip to {state.get('destination', 'Unknown')} has been successfully booked.
+Your trip to {plan.destination} has been successfully booked.
 
 **Booking Details:**
 • Plan ID: {request.plan_id}
@@ -405,31 +402,28 @@ You will receive confirmation emails for each booking component.
         )
 
 @app.get("/get_user_plans/{user_wallet}", response_model=GetUserPlansResponse)
-async def get_user_plans(user_wallet: str):
+async def get_user_plans(user_wallet: str, db: Session = Depends(get_db)):
     """
     Retrieve all plans associated with a user wallet.
     """
     try:
-        if user_wallet not in user_plans:
-            return GetUserPlansResponse(
-                status="success",
-                plans=[]
-            )
+        # Get plans from database
+        db_plans = PlanService.get_user_plans(db, user_wallet)
         
-        user_plan_ids = user_plans[user_wallet]
         plans = []
-        
-        for plan_id in user_plan_ids:
-            if plan_id in generated_plans:
-                plan_data = generated_plans[plan_id]["plan"]
-                user_plan = UserPlan(
-                    plan_id=plan_id,
-                    destination=plan_data["destination"],
-                    total_cost=plan_data["grand_total"],
-                    created_at=plan_data["created_at"],
-                    status="confirmed" if generated_plans[plan_id].get("confirmed") else "pending"
-                )
-                plans.append(user_plan)
+        for db_plan in db_plans:
+            # Extract total cost from plan_data
+            plan_data = db_plan.plan_data
+            total_cost = plan_data.get('grand_total', 0) if plan_data else 0
+            
+            user_plan = UserPlan(
+                plan_id=str(db_plan.id),
+                destination=db_plan.destination,
+                total_cost=total_cost,
+                created_at=db_plan.created_at.isoformat() if db_plan.created_at else "",
+                status=db_plan.status
+            )
+            plans.append(user_plan)
         
         return GetUserPlansResponse(
             status="success",
