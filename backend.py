@@ -1,31 +1,55 @@
 from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 import uvicorn
 from wallet import get_wallet_balances_async
-from agent_tools import TOOLS
+from agent_tools import TOOLS, book_flight, get_booking_status, confirm_booking_payment, calculate_travel_cost
 from main import app as langgraph_app
 import openai
 import os
 from nodes.planner import plan_tasks
 from tools.ipfs import retrieve_referrals_by_wallet
-from travel_graph import travel_app  # Import the new travel planner graph
+from travel_graph import travel_app
 import uuid
 from datetime import datetime
-
-# Database imports
+import json
 from sqlalchemy.orm import Session
 from database import get_db, init_db
 from db_service import PlanService
-from models import Plan
+from x402_middleware import X402Middleware, TravelBookingPaymentService, setup_x402_payments
 
 app = FastAPI(title="AI Agent Wallet API", version="1.0.0")
+
+# Global variables
+travel_agent = None
+x402_payment_service = None
 
 # Initialize database on startup
 @app.on_event("startup")
 async def startup_event():
+    global travel_agent, x402_payment_service
+    
+    # Initialize database
     init_db()
+    
+    # Initialize travel agent
+    try:
+        travel_agent = travel_app
+        print("✅ Travel agent initialized successfully")
+    except Exception as e:
+        print(f"⚠️ Travel agent initialization failed: {e}")
+    
+    # Initialize x402 payment system
+    try:
+        x402_payment_service = await setup_x402_payments()
+        x402_middleware = x402_payment_service.get_middleware()
+        app.add_middleware(BaseHTTPMiddleware, dispatch=x402_middleware)
+        print("✅ x402 payment system initialized successfully")
+    except Exception as e:
+        print(f"⚠️ x402 payment system initialization failed: {e}")
+        print("Continuing without payment system...")
 
 # Allow CORS for modern frontend frameworks
 app.add_middleware(
@@ -118,6 +142,27 @@ class AgentRequest(BaseModel):
     input: str = None
     user_input: str = None
     referrer_wallet: str = None
+
+class TravelRequest(BaseModel):
+    destination: str
+    budget: int
+    user_wallet: str
+
+class TravelResponse(BaseModel):
+    plan_id: str
+    destination: str
+    plan_data: Dict[str, Any]
+    status: str
+
+class BookingRequest(BaseModel):
+    flight_id: str
+    passenger_name: str
+    passenger_email: str
+    payment_method: str = "crypto"
+    plan_id: Optional[str] = None
+
+class PaymentConfirmation(BaseModel):
+    payment_transaction_hash: Optional[str] = None
 
 # ============================================================================
 # Helper Functions
@@ -561,10 +606,7 @@ async def ipfs_upload(request: dict):
 
 @app.get("/health")
 async def health_check():
-    return {
-        "status": "success",
-        "response": "AI Agent Wallet API is running"
-    }
+    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
 
 @app.get("/referrals/{wallet_address}")
 async def get_referrals(wallet_address: str):
@@ -576,6 +618,119 @@ async def get_referrals(wallet_address: str):
         error_str = traceback.format_exc()
         print(f"[backend.py] Referral retrieval error: {error_str}")
         return {"status": "error", "response": "Failed to retrieve referrals.", "error": str(e)}
+
+# New x402-integrated booking endpoints
+@app.post("/api/flights/book")
+async def book_flight_api(booking_request: BookingRequest):
+    """Book a flight with x402 payment integration"""
+    try:
+        # Use the book_flight tool from agent_tools
+        result = book_flight(
+            flight_id=booking_request.flight_id,
+            passenger_name=booking_request.passenger_name,
+            passenger_email=booking_request.passenger_email,
+            payment_method=booking_request.payment_method,
+            plan_id=booking_request.plan_id
+        )
+        
+        # Parse the result
+        booking_data = json.loads(result)
+        
+        if booking_data.get("status") == "success":
+            return {
+                "status": "success",
+                "booking_id": booking_data["booking_id"],
+                "message": booking_data["message"],
+                "payment_required": booking_data.get("payment_required", False),
+                "payment_amount": booking_data.get("payment_amount"),
+                "payment_currency": booking_data.get("payment_currency"),
+                "next_step": booking_data.get("next_step")
+            }
+        else:
+            raise HTTPException(status_code=400, detail=booking_data.get("message", "Booking failed"))
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/bookings/{booking_id}")
+async def get_booking_api(booking_id: str):
+    """Get booking status and details"""
+    try:
+        # Use the get_booking_status tool from agent_tools
+        result = get_booking_status(booking_id)
+        
+        # Parse the result
+        booking_data = json.loads(result)
+        
+        if "error" in booking_data:
+            raise HTTPException(status_code=404, detail=booking_data["message"])
+        
+        return booking_data
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/bookings/{booking_id}/payment")
+async def confirm_payment_api(booking_id: str, payment_data: PaymentConfirmation):
+    """Confirm payment for a booking"""
+    try:
+        # Use the confirm_booking_payment tool from agent_tools
+        result = confirm_booking_payment(
+            booking_id=booking_id,
+            payment_transaction_hash=payment_data.payment_transaction_hash
+        )
+        
+        # Parse the result
+        confirmation_data = json.loads(result)
+        
+        if confirmation_data.get("status") == "success":
+            return confirmation_data
+        else:
+            raise HTTPException(status_code=400, detail=confirmation_data.get("message", "Payment confirmation failed"))
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/payments/pricing")
+async def get_payment_pricing():
+    """Get x402 payment pricing structure"""
+    try:
+        if x402_payment_service:
+            return {
+                "status": "success",
+                "pricing": x402_payment_service.pricing,
+                "wallet_address": x402_payment_service.wallet_address,
+                "network": "base-mainnet",
+                "currency": "USDC"
+            }
+        else:
+            return {
+                "status": "error",
+                "message": "Payment system not initialized"
+            }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/travel/cost-calculation")
+async def calculate_travel_cost_api(request: Dict[str, Any]):
+    """Calculate travel costs including x402 fees"""
+    try:
+        result = calculate_travel_cost(
+            flights=request.get("flights", ""),
+            hotels=request.get("hotels"),
+            activities=request.get("activities")
+        )
+        
+        # Parse the result
+        cost_data = json.loads(result)
+        
+        if cost_data.get("status") == "success":
+            return cost_data
+        else:
+            raise HTTPException(status_code=400, detail="Cost calculation failed")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     uvicorn.run("backend:app", host="0.0.0.0", port=8000, reload=True, loop="asyncio") 
