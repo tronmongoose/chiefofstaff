@@ -32,131 +32,149 @@ export default function ReviewPage() {
     );
   }
 
+  // Calculate x402 payment amounts
+  const totalUSD = plan.grand_total;
+  const x402Fee = 0.21; // Total x402 fees for the booking flow
+  const totalUSDC = totalUSD + x402Fee;
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <div className="max-w-4xl mx-auto">
-        <div className="bg-white rounded-2xl shadow-xl p-8 mb-6">
+        {/* Hero Payment Section */}
+        <div className="bg-white rounded-2xl shadow-2xl p-8 mb-6 border-2 border-blue-100">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Review Your Travel Plan</h1>
-            <p className="text-gray-600">Please review your trip details before confirming</p>
+            <div className="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-blue-100 text-blue-800 mb-4">
+              ⚡ x402 Crypto Payment Ready
+            </div>
+            <h1 className="text-4xl font-bold text-gray-900 mb-4">Pay with Crypto</h1>
+            <p className="text-xl text-gray-600">Complete your booking with instant USDC payment</p>
           </div>
 
+          {/* Payment Amount Display */}
+          <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-8 text-white mb-8">
+            <div className="text-center">
+              <div className="text-2xl font-medium mb-2">Total Payment</div>
+              <div className="text-5xl font-bold mb-2">${totalUSD.toFixed(2)}</div>
+              <div className="text-lg opacity-90">+ ${x402Fee.toFixed(2)} x402 fees</div>
+              <div className="text-2xl font-semibold mt-2">= ${totalUSDC.toFixed(2)} USDC</div>
+            </div>
+          </div>
+
+          {/* x402 Payment Benefits */}
+          <div className="grid md:grid-cols-3 gap-6 mb-8">
+            <div className="text-center">
+              <div className="text-3xl mb-2">⚡</div>
+              <h3 className="font-semibold mb-1">Instant</h3>
+              <p className="text-sm text-gray-600">Payment confirmed in seconds</p>
+            </div>
+            <div className="text-center">
+              <div className="text-3xl mb-2">🔒</div>
+              <h3 className="font-semibold mb-1">Secure</h3>
+              <p className="text-sm text-gray-600">Blockchain verified</p>
+            </div>
+            <div className="text-center">
+              <div className="text-3xl mb-2">💎</div>
+              <h3 className="font-semibold mb-1">Transparent</h3>
+              <p className="text-sm text-gray-600">No hidden fees</p>
+            </div>
+          </div>
+
+          {/* Hero Action Button */}
+          <div className="text-center">
+            <button
+              onClick={handleConfirm}
+              disabled={loading}
+              className="w-full max-w-md bg-gradient-to-r from-green-600 to-emerald-600 text-white py-6 px-8 rounded-2xl font-bold text-2xl hover:from-green-700 hover:to-emerald-700 transform hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none shadow-2xl"
+            >
+              {loading ? (
+                <div className="flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white mr-3"></div>
+                  Processing Payment...
+                </div>
+              ) : (
+                <div className="flex items-center justify-center">
+                  <span className="mr-2">💳</span>
+                  Pay ${totalUSDC.toFixed(2)} USDC
+                </div>
+              )}
+            </button>
+            
+            <p className="text-sm text-gray-500 mt-3">
+              No credit card required • Instant confirmation • Secure blockchain payment
+            </p>
+          </div>
+        </div>
+
+        {/* Simplified Trip Summary */}
+        <div className="bg-white rounded-2xl shadow-xl p-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">Trip Summary</h2>
+          
           <div className="grid md:grid-cols-2 gap-8">
-            {/* Plan Summary */}
-            <div className="space-y-6">
-              <div className="bg-blue-50 rounded-xl p-6">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">Trip Summary</h2>
-                <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Destination:</span>
-                    <span className="font-semibold">{plan.destination}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Total Cost:</span>
-                    <span className="font-semibold text-green-600">${plan.grand_total.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Plan ID:</span>
-                    <span className="font-mono text-sm text-gray-500">{plan.plan_id}</span>
-                  </div>
-                </div>
+            {/* Basic Trip Info */}
+            <div className="space-y-4">
+              <div className="flex justify-between items-center p-4 bg-blue-50 rounded-xl">
+                <span className="font-medium">Destination</span>
+                <span className="font-semibold text-blue-600">{plan.destination}</span>
               </div>
-
-              {/* Flights */}
-              <div className="bg-gray-50 rounded-xl p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">✈️ Flights</h3>
-                {plan.flights.map((flight: any, index: number) => (
-                  <div key={index} className="border-l-4 border-blue-500 pl-4 mb-4">
-                    <div className="font-medium">{flight.from_location} → {flight.to_location}</div>
-                    <div className="text-sm text-gray-600">{flight.airline}</div>
-                    <div className="text-sm text-gray-600">{flight.dates}</div>
-                    <div className="text-green-600 font-semibold">${flight.price.toFixed(2)}</div>
-                  </div>
-                ))}
+              
+              <div className="flex justify-between items-center p-4 bg-green-50 rounded-xl">
+                <span className="font-medium">Flights</span>
+                <span className="font-semibold text-green-600">
+                  ${plan.flights.reduce((sum: number, f: any) => sum + f.price, 0).toFixed(2)}
+                </span>
               </div>
-
-              {/* Hotels */}
-              <div className="bg-gray-50 rounded-xl p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">🏨 Accommodation</h3>
-                {plan.hotels.map((hotel: any, index: number) => (
-                  <div key={index} className="border-l-4 border-green-500 pl-4 mb-4">
-                    <div className="font-medium">{hotel.name}</div>
-                    <div className="text-sm text-gray-600">{hotel.location}</div>
-                    <div className="text-sm text-gray-600">{hotel.nights} nights × ${hotel.price_per_night.toFixed(2)}</div>
-                    <div className="text-green-600 font-semibold">${hotel.total.toFixed(2)}</div>
-                  </div>
-                ))}
+              
+              <div className="flex justify-between items-center p-4 bg-purple-50 rounded-xl">
+                <span className="font-medium">Accommodation</span>
+                <span className="font-semibold text-purple-600">
+                  ${plan.hotels.reduce((sum: number, h: any) => sum + h.total, 0).toFixed(2)}
+                </span>
               </div>
             </div>
 
-            {/* Activities and Actions */}
-            <div className="space-y-6">
-              {/* Activities */}
-              <div className="bg-gray-50 rounded-xl p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">🎯 Activities</h3>
-                <ul className="space-y-2">
-                  {plan.activities.map((activity: string, index: number) => (
-                    <li key={index} className="flex items-center">
-                      <span className="w-2 h-2 bg-blue-500 rounded-full mr-3"></span>
-                      {activity}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Cost Breakdown */}
-              <div className="bg-gray-50 rounded-xl p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">💰 Cost Breakdown</h3>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span>Flights:</span>
-                    <span>${plan.flights.reduce((sum: number, f: any) => sum + f.price, 0).toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Accommodation:</span>
-                    <span>${plan.hotels.reduce((sum: number, h: any) => sum + h.total, 0).toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Activities:</span>
-                    <span>$200.00</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Platform Fee:</span>
-                    <span>${plan.platform_fee.toFixed(2)}</span>
-                  </div>
-                  <hr className="my-2" />
-                  <div className="flex justify-between font-semibold text-lg">
-                    <span>Total:</span>
-                    <span className="text-green-600">${plan.grand_total.toFixed(2)}</span>
-                  </div>
+            {/* x402 Payment Breakdown */}
+            <div className="bg-gray-50 rounded-xl p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">x402 Payment Breakdown</h3>
+              <div className="space-y-3">
+                <div className="flex justify-between">
+                  <span>Travel Cost:</span>
+                  <span>${totalUSD.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-blue-600">
+                  <span>Flight Search Fee:</span>
+                  <span>0.01 USDC</span>
+                </div>
+                <div className="flex justify-between text-blue-600">
+                  <span>Flight Booking Fee:</span>
+                  <span>0.10 USDC</span>
+                </div>
+                <div className="flex justify-between text-blue-600">
+                  <span>Hotel Booking Fee:</span>
+                  <span>0.10 USDC</span>
+                </div>
+                <hr className="my-3" />
+                <div className="flex justify-between font-bold text-lg">
+                  <span>Total USDC:</span>
+                  <span className="text-green-600">${totalUSDC.toFixed(2)}</span>
                 </div>
               </div>
-
-              {/* Action Buttons */}
-              <div className="space-y-4">
-                <button
-                  onClick={handleConfirm}
-                  disabled={loading}
-                  className="w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white py-4 px-6 rounded-xl font-semibold hover:from-green-700 hover:to-emerald-700 transform hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none shadow-lg"
-                >
-                  {loading ? (
-                    <div className="flex items-center justify-center">
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                      Confirming...
-                    </div>
-                  ) : (
-                    "Confirm & Book Trip"
-                  )}
-                </button>
-                
-                <button
-                  onClick={() => router.push("/")}
-                  className="w-full bg-gray-200 text-gray-700 py-3 px-6 rounded-xl font-semibold hover:bg-gray-300 transition-all duration-200"
-                >
-                  Back to Home
-                </button>
+              
+              <div className="mt-4 p-3 bg-blue-100 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  💡 x402 fees are minimal and transparent. Traditional booking sites charge 10-20% in hidden fees.
+                </p>
               </div>
             </div>
+          </div>
+
+          {/* Back Button */}
+          <div className="text-center mt-8">
+            <button
+              onClick={() => router.push("/")}
+              className="bg-gray-200 text-gray-700 py-3 px-8 rounded-xl font-semibold hover:bg-gray-300 transition-all duration-200"
+            >
+              ← Back to Home
+            </button>
           </div>
         </div>
       </div>

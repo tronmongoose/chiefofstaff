@@ -3,7 +3,6 @@ from dotenv import load_dotenv
 from langgraph.graph import StateGraph
 from state import AgentState
 from memory import create_memory
-from retrieval import create_vectorstore
 from nodes.planner import plan_tasks
 from nodes.executor import execute_next_task
 
@@ -12,20 +11,12 @@ load_dotenv()
 
 # Initialize components
 memory = create_memory()
-vectorstore = create_vectorstore()
 
 # -------- LangGraph Nodes --------
 
 def memory_node(state: AgentState) -> AgentState:
     chat_history = memory.load_memory_variables({}).get("chat_history", [])
     state["chat_history"] = chat_history
-    return state
-
-def retrieval_node(state: AgentState) -> AgentState:
-    retriever = vectorstore.as_retriever()
-    docs = retriever.invoke(state['input'])
-    retrieved_text = "\n".join([doc.page_content for doc in docs])
-    state['retrieved_docs'] = retrieved_text
     return state
 
 # -------- Build LangGraph --------

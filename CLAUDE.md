@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a LangGraph-powered AI travel planning agent with cryptocurrency wallet integration. It consists of:
+This is a AI travel planning agent with cryptocurrency wallet integration. It consists of:
 
 - **Backend**: FastAPI server with LangGraph agent, PostgreSQL database, and vector store
 - **Frontend**: Next.js app with TypeScript and Tailwind CSS

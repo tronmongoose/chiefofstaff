@@ -3,9 +3,12 @@
 # OpenAI API Key
 OPENAI_API_KEY=your_openai_api_key_here
 
+# Anthropic API Key (for Claude CLI)
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
+
 # Amadeus API Credentials
-AMADEUS_API_KEY=your_amadeus_api_key_here
-AMADEUS_API_SECRET=your_amadeus_api_secret_here
+AMADEUS_CLIENT_ID=your_amadeus_client_id_here
+AMADEUS_CLIENT_SECRET=your_amadeus_client_secret_here
 
 # OpenWeather API Key (optional)
 OPENWEATHER_API_KEY=your_openweather_api_key_here

@@ -32,8 +32,26 @@ from decimal import Decimal
 # --- x402 payment system initialization (TOP-LEVEL) ---
 x402_payment_service = None
 x402_middleware = None
-# Temporarily disabled for development
-print("⚠️ [BOOT] x402 payment system disabled for development")
+try:
+    print("🔧 [BOOT] Initializing x402 payment system before app creation...")
+    from x402_middleware import payment_service, setup_x402_payments
+    x402_payment_service = payment_service
+    # Initialize the payment service wallet (sync workaround for startup)
+    import asyncio
+    loop = asyncio.get_event_loop()
+    if loop.is_running():
+        # If running in a notebook or async context, create a new loop
+        import nest_asyncio
+        nest_asyncio.apply()
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    loop.run_until_complete(payment_service.initialize_wallet())
+    x402_middleware = loop.run_until_complete(setup_x402_payments())
+    print(f"✅ [BOOT] x402 payment system initialized. Wallet: {payment_service.wallet_address}")
+except Exception as e:
+    print(f"⚠️ [BOOT] x402 payment system failed to initialize: {e}")
+    x402_payment_service = None
+    x402_middleware = None
 
 # --- FastAPI app creation ---
 app = FastAPI(title="AI Agent Wallet API", version="1.0.0")
@@ -517,7 +535,7 @@ async def get_user_plans(user_wallet: str, db: Session = Depends(get_db)):
     Get all plans for a specific user wallet.
     """
     try:
-        plans = PlanService.get_user_plans(db, user_wallet)
+        plans = PlanService.get_plans_by_wallet(db, user_wallet)
         
         user_plans = []
         for plan in plans:
@@ -647,25 +665,26 @@ async def create_reputation_record(
 ) -> ReputationRecord:
     """Create a new reputation record and store it on IPFS"""
     try:
-        # Create the reputation record using the correct model structure
-        record = create_booking_record(
-            traveler_wallet=traveler_wallet,
-            platform_wallet=platform_wallet,
-            destination=trip_data.destination,
-            cost_usd=float(trip_data.cost_usd),
-            cost_usdc=float(trip_data.cost_usdc),
-            duration_days=trip_data.duration_days,
-            start_date=trip_data.start_date,
-            end_date=trip_data.end_date,
-            booking_id=trip_data.booking_id,
-            plan_id=trip_data.plan_id,
+        # Create the reputation record
+        record = ReputationRecord(
+            record_id=str(uuid.uuid4()),
+            wallet_address=traveler_wallet,
+            event_type=event_type,
+            timestamp=datetime.utcnow(),
+            trip_data=trip_data,
             payment_tx_hash=payment_tx_hash,
-            referrer_wallet=referrer_wallet
+            referrer_wallet=referrer_wallet,
+            previous_record_hash=previous_record_hash,
+            ipfs_hash="",  # Will be set after storage
+            metadata={
+                "platform_wallet": platform_wallet,
+                "created_at": datetime.utcnow().isoformat()
+            }
         )
         
-        # Store on IPFS using Pinata service
-        ipfs_hash = pinata_service.store_reputation_record(record)
-        record.verification_data.ipfs_hash = ipfs_hash
+        # Store on IPFS
+        ipfs_hash = await IPFSStorageUtils.store_reputation_record(record)
+        record.ipfs_hash = ipfs_hash
         
         print(f"✅ Reputation record created and stored on IPFS: {ipfs_hash}")
         return record
@@ -674,26 +693,84 @@ async def create_reputation_record(
         print(f"❌ Failed to create reputation record: {e}")
         return None
 
-async def update_reputation_summary(wallet_address: str, new_record: ReputationRecord):
+async def update_reputation_summary(wallet_address: str, new_record: ReputationRecord) -> ReputationSummary:
     """Update or create reputation summary for a wallet"""
     try:
-        # For now, just log that we're updating the reputation summary
-        # In a full implementation, this would:
-        # 1. Retrieve existing reputation summary from IPFS
-        # 2. Calculate new reputation score based on the record
-        # 3. Update summary statistics
-        # 4. Store updated summary back to IPFS
+        # Get existing summary or create new one
+        existing_summary = await IPFSStorageUtils.get_reputation_summary(wallet_address)
         
-        print(f"✅ Updating reputation summary for {wallet_address}")
-        print(f"   Event: {new_record.event_type}")
-        print(f"   IPFS Hash: {new_record.verification_data.ipfs_hash}")
+        if existing_summary:
+            # Update existing summary
+            summary = existing_summary
+            summary.total_records += 1
+            summary.last_updated = datetime.utcnow()
+            
+            # Update based on event type
+            if new_record.event_type == EventType.BOOKING_CREATED:
+                summary.total_bookings += 1
+                if new_record.trip_data:
+                    summary.total_spent_usd += new_record.trip_data.cost_usd
+                    if new_record.trip_data.destination not in summary.countries_visited:
+                        summary.countries_visited.append(new_record.trip_data.destination)
+            
+            elif new_record.event_type == EventType.BOOKING_COMPLETED:
+                summary.completed_bookings += 1
+                summary.completion_rate = summary.completed_bookings / summary.total_bookings if summary.total_bookings > 0 else 0
+            
+            elif new_record.event_type == EventType.BOOKING_CANCELLED:
+                summary.cancelled_bookings += 1
+            
+            elif new_record.event_type == EventType.DISPUTE_OPENED:
+                summary.disputed_bookings += 1
+                summary.dispute_rate = summary.disputed_bookings / summary.total_bookings if summary.total_bookings > 0 else 0
+            
+            elif new_record.event_type == EventType.REFERRAL_BONUS:
+                summary.total_referrals += 1
+                summary.total_bonus_earned += Decimal('10.00')  # Fixed bonus amount
+            
+            # Recalculate reputation score
+            summary.reputation_score = calculate_reputation_score(summary)
+            summary.reputation_level = get_reputation_level(summary.reputation_score)
+            
+        else:
+            # Create new summary
+            summary = ReputationSummary(
+                wallet_address=wallet_address,
+                reputation_score=Decimal('10.00'),  # Starting score
+                reputation_level=ReputationLevel.NEW,
+                total_bookings=1 if new_record.event_type == EventType.BOOKING_CREATED else 0,
+                completed_bookings=0,
+                cancelled_bookings=0,
+                disputed_bookings=0,
+                total_spent_usd=Decimal('0.00'),
+                average_rating=Decimal('0.00'),
+                completion_rate=Decimal('0.00'),
+                dispute_rate=Decimal('0.00'),
+                countries_visited=[new_record.trip_data.destination] if new_record.trip_data else [],
+                total_travel_days=0,
+                total_referrals=0,
+                successful_referrals=0,
+                total_commission_earned=Decimal('0.00'),
+                total_bonus_earned=Decimal('0.00'),
+                first_booking_date=datetime.utcnow(),
+                last_booking_date=datetime.utcnow(),
+                last_updated=datetime.utcnow()
+            )
+            
+            # Update based on event type
+            if new_record.event_type == EventType.BOOKING_CREATED and new_record.trip_data:
+                summary.total_spent_usd = new_record.trip_data.cost_usd
+                summary.first_booking_date = datetime.utcnow()
+                summary.last_booking_date = datetime.utcnow()
         
-        # For demo purposes, we'll just return success
-        return True
+        # Store updated summary on IPFS
+        await IPFSStorageUtils.store_reputation_summary(summary)
+        
+        return summary
         
     except Exception as e:
         print(f"❌ Failed to update reputation summary: {e}")
-        return False
+        return None
 
 def calculate_reputation_score(summary: ReputationSummary) -> Decimal:
     """Calculate reputation score based on various factors"""
@@ -738,90 +815,6 @@ def get_reputation_level(score: Decimal) -> ReputationLevel:
         return ReputationLevel.NEW
 
 # ============================================================================
-# Demo Reputation Data Generator
-# ============================================================================
-
-def generate_demo_reputation_data(wallet_address: str) -> dict:
-    """Generate demo reputation data based on wallet address for hackathon demo"""
-    import hashlib
-    
-    # Use wallet hash to generate consistent but varied data
-    hash_obj = hashlib.md5(wallet_address.encode())
-    hash_int = int(hash_obj.hexdigest()[:8], 16) % 1000
-    
-    # Generate reputation level based on hash
-    levels = ["NEW", "BRONZE", "SILVER", "GOLD", "PLATINUM", "DIAMOND"]
-    level_index = hash_int % len(levels)
-    reputation_level = levels[level_index]
-    
-    # Generate score based on level
-    base_scores = [15, 45, 100, 200, 350, 500]
-    base_score = base_scores[level_index]
-    reputation_score = base_score + (hash_int % 50)
-    
-    # Generate other stats
-    total_bookings = max(1, level_index * 2 + (hash_int % 3))
-    completed_bookings = max(0, total_bookings - (hash_int % 2))
-    
-    countries = ["France", "Italy", "Spain", "Japan", "USA", "Germany", "Thailand", "Australia"]
-    countries_visited = countries[:(hash_int % 4) + 1]
-    
-    return {
-        "wallet_address": wallet_address,
-        "reputation_level": reputation_level,
-        "reputation_score": float(reputation_score),
-        "total_bookings": total_bookings,
-        "completed_bookings": completed_bookings,
-        "cancelled_bookings": max(0, total_bookings - completed_bookings),
-        "disputed_bookings": 0 if level_index > 2 else (hash_int % 2),
-        "total_spent_usd": float(total_bookings * 1500 + (hash_int % 500)),
-        "average_rating": min(5.0, 3.5 + (level_index * 0.3) + ((hash_int % 10) / 20)),
-        "completion_rate": float(completed_bookings / total_bookings if total_bookings > 0 else 0),
-        "dispute_rate": 0.0,
-        "countries_visited": countries_visited,
-        "total_travel_days": total_bookings * 7 + (hash_int % 14),
-        "total_referrals": max(0, level_index - 1 + (hash_int % 2)),
-        "successful_referrals": max(0, level_index - 2 + (hash_int % 2)),
-        "total_commission_earned": float((level_index * 25) + (hash_int % 50)),
-        "total_bonus_earned": float((level_index * 15) + (hash_int % 30)),
-        "first_booking_date": "2024-01-15T10:30:00Z",
-        "last_booking_date": "2024-12-01T14:20:00Z",
-        "last_updated": datetime.utcnow().isoformat()
-    }
-
-def generate_demo_leaderboard_data(limit: int = 10) -> list:
-    """Generate demo leaderboard data"""
-    demo_wallets = [
-        "0x1a2b3c4d5e6f7890abcdef1234567890abcdef12",
-        "0x2b3c4d5e6f7890ab1234567890abcdef12345678", 
-        "0x3c4d5e6f7890ab12567890abcdef1234567890ab",
-        "0x4d5e6f7890ab123467890abcdef1234567890abc",
-        "0x5e6f7890ab1234567890abcdef1234567890abcd",
-        "0x6f7890ab1234567890abcdef1234567890abcdef",
-        "0x7890ab1234567890abcdef1234567890abcdef12",
-        "0x890ab1234567890abcdef1234567890abcdef123",
-        "0x90ab1234567890abcdef1234567890abcdef1234",
-        "0xab1234567890abcdef1234567890abcdef123456"
-    ]
-    
-    leaderboard = []
-    for wallet in demo_wallets[:limit]:
-        data = generate_demo_reputation_data(wallet)
-        leaderboard.append({
-            "wallet_address": wallet,
-            "reputation_score": data["reputation_score"],
-            "reputation_level": data["reputation_level"],
-            "total_bookings": data["total_bookings"],
-            "completed_bookings": data["completed_bookings"],
-            "average_rating": data["average_rating"],
-            "countries_visited": len(data["countries_visited"])
-        })
-    
-    # Sort by reputation score descending
-    leaderboard.sort(key=lambda x: x["reputation_score"], reverse=True)
-    return leaderboard
-
-# ============================================================================
 # Reputation API Endpoints
 # ============================================================================
 
@@ -829,24 +822,51 @@ def generate_demo_leaderboard_data(limit: int = 10) -> list:
 async def get_wallet_reputation_api(wallet_address: str):
     """Get reputation data for a specific wallet"""
     try:
-        # Generate demo reputation data
-        demo_data = generate_demo_reputation_data(wallet_address)
+        # Get reputation summary
+        summary = await IPFSStorageUtils.get_reputation_summary(wallet_address)
         
-        # Convert to proper response format
-        return {
-            "status": "success",
-            "wallet_address": wallet_address,
-            "reputation_summary": demo_data,
-            "recent_records": [],
-            "total_records": demo_data["total_bookings"]
-        }
+        if not summary:
+            # Create default summary for new wallet
+            summary = ReputationSummary(
+                wallet_address=wallet_address,
+                reputation_score=Decimal('0.00'),
+                reputation_level=ReputationLevel.NEW,
+                total_bookings=0,
+                completed_bookings=0,
+                cancelled_bookings=0,
+                disputed_bookings=0,
+                total_spent_usd=Decimal('0.00'),
+                average_rating=Decimal('0.00'),
+                completion_rate=Decimal('0.00'),
+                dispute_rate=Decimal('0.00'),
+                countries_visited=[],
+                total_travel_days=0,
+                total_referrals=0,
+                successful_referrals=0,
+                total_commission_earned=Decimal('0.00'),
+                total_bonus_earned=Decimal('0.00'),
+                first_booking_date=datetime.utcnow(),
+                last_booking_date=datetime.utcnow(),
+                last_updated=datetime.utcnow()
+            )
+        
+        # Get recent records (mock data for now)
+        recent_records = []
+        
+        return ReputationResponse(
+            status="success",
+            wallet_address=wallet_address,
+            reputation_summary=summary,
+            recent_records=recent_records,
+            total_records=summary.total_bookings
+        )
         
     except Exception as e:
-        return {
-            "status": "error",
-            "wallet_address": wallet_address,
-            "error": f"Failed to get reputation data: {str(e)}"
-        }
+        return ReputationResponse(
+            status="error",
+            wallet_address=wallet_address,
+            error=f"Failed to get reputation data: {str(e)}"
+        )
 
 @app.post("/api/reputation/event", response_model=ReputationEventResponse)
 async def create_reputation_event_api(event_request: ReputationEventRequest):
@@ -922,22 +942,50 @@ async def get_reputation_records_api(wallet_address: str, limit: int = 20):
 async def get_reputation_leaderboard_api(limit: int = 10):
     """Get reputation leaderboard"""
     try:
-        # Generate demo leaderboard data
-        leaderboard_data = generate_demo_leaderboard_data(limit)
+        # Mock leaderboard data for now
+        leaderboard = [
+            LeaderboardEntry(
+                wallet_address="0x1234567890abcdef1234567890abcdef1234567890",
+                reputation_score=Decimal('850.00'),
+                reputation_level=ReputationLevel.PLATINUM,
+                total_bookings=25,
+                completed_bookings=24,
+                average_rating=Decimal('4.8'),
+                countries_visited=8
+            ),
+            LeaderboardEntry(
+                wallet_address="0xabcdef1234567890abcdef1234567890abcdef1234",
+                reputation_score=Decimal('650.00'),
+                reputation_level=ReputationLevel.GOLD,
+                total_bookings=18,
+                completed_bookings=17,
+                average_rating=Decimal('4.6'),
+                countries_visited=6
+            ),
+            LeaderboardEntry(
+                wallet_address="0x9876543210fedcba9876543210fedcba9876543210",
+                reputation_score=Decimal('450.00'),
+                reputation_level=ReputationLevel.SILVER,
+                total_bookings=12,
+                completed_bookings=11,
+                average_rating=Decimal('4.4'),
+                countries_visited=4
+            )
+        ]
         
-        return {
-            "status": "success",
-            "leaderboard": leaderboard_data,
-            "total_participants": len(leaderboard_data)
-        }
+        return LeaderboardResponse(
+            status="success",
+            leaderboard=leaderboard[:limit],
+            total_participants=len(leaderboard)
+        )
         
     except Exception as e:
-        return {
-            "status": "error",
-            "leaderboard": [],
-            "total_participants": 0,
-            "error": f"Failed to get leaderboard: {str(e)}"
-        }
+        return LeaderboardResponse(
+            status="error",
+            leaderboard=[],
+            total_participants=0,
+            error=f"Failed to get leaderboard: {str(e)}"
+        )
 
 @app.get("/api/reputation/levels")
 async def get_reputation_levels_api():

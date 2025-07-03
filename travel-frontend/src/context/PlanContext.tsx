@@ -53,7 +53,7 @@ export const PlanProvider = ({ children }: { children: React.ReactNode }) => {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("http://localhost:8000/generate_plan", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/generate_plan`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -87,7 +87,7 @@ export const PlanProvider = ({ children }: { children: React.ReactNode }) => {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("http://localhost:8000/confirm_plan", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/confirm_plan`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
